@@ -39,20 +39,33 @@ public class User {
     @Column(name = "current_weight")
     private Double currentWeight;
 
-    @Column(name = "target_weight")
-    private Double targetWeight;
+    @Column(name = "weight_goal")
+    private Double weightGoal;
+
+    @Column(name = "height")
+    private Double height;
+
+    @Column(name = "age")
+    private Integer age;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "activity_level")
+    private ActivityLevel activityLevel;
+
+    @Column(name = "body_fat_percentage")
+    private Double bodyFatPercentage;
 
     @Column(name = "daily_calories")
     private Integer dailyCalories;
 
-    @Column(name = "target_protein")
-    private Integer targetProtein;
+    @Column(name = "protein_goal")
+    private Integer proteinGoal;
 
-    @Column(name = "target_carbs")
-    private Integer targetCarbs;
+    @Column(name = "carb_goal")
+    private Integer carbGoal;
 
-    @Column(name = "target_fats")
-    private Integer targetFats;
+    @Column(name = "fat_goal")
+    private Integer fatGoal;
 
     @OneToMany(mappedBy = "user", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     private List<WeightLog> weightLogs = new ArrayList<>();

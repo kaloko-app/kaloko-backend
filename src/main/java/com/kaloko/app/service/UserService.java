@@ -1,0 +1,173 @@
+package com.kaloko.app.service;
+
+import com.kaloko.app.dto.*;
+import com.kaloko.app.entity.User;
+import com.kaloko.app.repository.UserRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.PBEKeySpec;
+import java.security.spec.InvalidKeySpecException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class UserService {
+
+    private final UserRepository userRepository;
+
+    @Transactional
+    public AuthenticationResponseDTO register(UserRegisterRequestDTO request) {
+        if (userRepository.existsByUsername(request.getUsername())) {
+            throw new IllegalArgumentException("Username is already taken");
+        }
+        if (userRepository.existsByEmail(request.getEmail())) {
+            throw new IllegalArgumentException("Email is already registered");
+        }
+
+        User user = new User();
+        user.setUsername(request.getUsername());
+        user.setEmail(request.getEmail());
+        user.setPassword(hashPassword(request.getPassword()));
+
+        User savedUser = userRepository.save(user);
+        
+        String token = "jwt_token_for_" + savedUser.getUsername();
+        
+        return new AuthenticationResponseDTO(token, convertToResponseDTO(savedUser));
+    }
+
+    public AuthenticationResponseDTO login(UserLoginRequestDTO request) {
+        User user = userRepository.findByUsername(request.getUsername())
+                .orElseThrow(() -> new IllegalArgumentException("Invalid username or password"));
+
+        if (!verifyPassword(request.getPassword(), user.getPassword())) {
+            throw new IllegalArgumentException("Invalid username or password");
+        }
+
+        String token = "jwt_token_for_" + user.getUsername();
+        return new AuthenticationResponseDTO(token, convertToResponseDTO(user));
+    }
+
+    @Transactional
+    public UserResponseDTO updateMetrics(UserMetricsUpdateRequestDTO request) {
+        User user = userRepository.findById(request.getUserId())
+                .orElseThrow(() -> new IllegalArgumentException("User not found with id: " + request.getUserId()));
+
+        user.setCurrentWeight(request.getCurrentWeight());
+        user.setWeightGoal(request.getWeightGoal());
+        user.setHeight(request.getHeight());
+        user.setAge(request.getAge());
+        user.setActivityLevel(request.getActivityLevel());
+        user.setBodyFatPercentage(request.getBodyFatPercentage());
+
+        calculateAndSetGoals(user);
+
+        User updatedUser = userRepository.save(user);
+        return convertToResponseDTO(updatedUser);
+    }
+
+    private void calculateAndSetGoals(User user) {
+        if (user.getCurrentWeight() == null || user.getHeight() == null || user.getAge() == null || user.getActivityLevel() == null) {
+            return;
+        }
+
+        // BMR calculation using Mifflin-St Jeor (using +5 as male default/baseline constant since gender is not a field)
+        double bmr = (10 * user.getCurrentWeight()) + (6.25 * user.getHeight()) - (5 * user.getAge()) + 5;
+
+        double activityMultiplier = switch (user.getActivityLevel()) {
+            case SEDENTARY -> 1.2;
+            case LIGHTLY_ACTIVE -> 1.375;
+            case MODERATELY_ACTIVE -> 1.55;
+            case VERY_ACTIVE -> 1.725;
+        };
+
+        double tdee = bmr * activityMultiplier;
+        int dailyCalories = (int) Math.round(tdee);
+
+        // Hypertrophy oriented macros:
+        // Protein: 2.2g per kg of current weight
+        int proteinGoal = (int) Math.round(user.getCurrentWeight() * 2.2);
+
+        // Fat: 25% of calories (range is 20-25%)
+        double fatCalories = dailyCalories * 0.25;
+        int fatGoal = (int) Math.round(fatCalories / 9.0);
+
+        // Carbs: Remaining calories
+        int proteinCalories = proteinGoal * 4;
+        int fatCaloriesActual = fatGoal * 9;
+        int remainingCalories = dailyCalories - proteinCalories - fatCaloriesActual;
+        int carbGoal = remainingCalories > 0 ? (int) Math.round(remainingCalories / 4.0) : 0;
+
+        user.setDailyCalories(dailyCalories);
+        user.setProteinGoal(proteinGoal);
+        user.setFatGoal(fatGoal);
+        user.setCarbGoal(carbGoal);
+    }
+
+    private UserResponseDTO convertToResponseDTO(User user) {
+        return new UserResponseDTO(
+                user.getId(),
+                user.getUsername(),
+                user.getEmail(),
+                user.getCurrentWeight(),
+                user.getWeightGoal(),
+                user.getHeight(),
+                user.getAge(),
+                user.getActivityLevel(),
+                user.getBodyFatPercentage(),
+                user.getDailyCalories(),
+                user.getProteinGoal(),
+                user.getCarbGoal(),
+                user.getFatGoal()
+        );
+    }
+
+    private String hashPassword(String password) {
+        SecureRandom random = new SecureRandom();
+        byte[] salt = new byte[16];
+        random.nextBytes(salt);
+
+        byte[] hash = pbkdf2(password.toCharArray(), salt, 600000, 256);
+        
+        String saltBase64 = Base64.getEncoder().encodeToString(salt);
+        String hashBase64 = Base64.getEncoder().encodeToString(hash);
+        
+        return "600000:" + saltBase64 + ":" + hashBase64;
+    }
+
+    private boolean verifyPassword(String password, String storedPassword) {
+        String[] parts = storedPassword.split(":");
+        if (parts.length != 3) {
+            return false;
+        }
+
+        try {
+            int iterations = Integer.parseInt(parts[0]);
+            byte[] salt = Base64.getDecoder().decode(parts[1]);
+            byte[] hash = Base64.getDecoder().decode(parts[2]);
+
+            byte[] testHash = pbkdf2(password.toCharArray(), salt, iterations, hash.length * 8);
+
+            return MessageDigest.isEqual(hash, testHash);
+        } catch (NumberFormatException | IllegalArgumentException e) {
+            return false;
+        }
+    }
+
+    private byte[] pbkdf2(char[] password, byte[] salt, int iterations, int keyLength) {
+        try {
+            PBEKeySpec spec = new PBEKeySpec(password, salt, iterations, keyLength);
+            SecretKeyFactory skf = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
+            return skf.generateSecret(spec).getEncoded();
+        } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
+            throw new RuntimeException("Error computing PBKDF2 hash", e);
+        }
+    }
+}

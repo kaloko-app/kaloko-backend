@@ -1,0 +1,13 @@
+package com.kaloko.app.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class UserLoginRequestDTO {
+    private String username;
+    private String password;
+}

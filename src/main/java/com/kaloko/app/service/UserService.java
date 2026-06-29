@@ -2,6 +2,8 @@ package com.kaloko.app.service;
 
 import com.kaloko.app.dto.*;
 import com.kaloko.app.entity.User;
+import com.kaloko.app.entity.Gender;
+import com.kaloko.app.exception.*;
 import com.kaloko.app.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -12,7 +14,6 @@ import java.security.spec.InvalidKeySpecException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
-import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
 @Service
@@ -25,15 +26,16 @@ public class UserService {
     @Transactional
     public AuthenticationResponseDTO register(UserRegisterRequestDTO request) {
         if (userRepository.existsByUsername(request.getUsername())) {
-            throw new IllegalArgumentException("Username is already taken");
+            throw new UserAlreadyExistsException("Username is already taken");
         }
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new IllegalArgumentException("Email is already registered");
+            throw new UserAlreadyExistsException("Email is already registered");
         }
 
         User user = new User();
         user.setUsername(request.getUsername());
         user.setEmail(request.getEmail());
+        user.setGender(request.getGender());
         user.setPassword(hashPassword(request.getPassword()));
 
         User savedUser = userRepository.save(user);
@@ -45,10 +47,10 @@ public class UserService {
 
     public AuthenticationResponseDTO login(UserLoginRequestDTO request) {
         User user = userRepository.findByUsername(request.getUsername())
-                .orElseThrow(() -> new IllegalArgumentException("Invalid username or password"));
+                .orElseThrow(() -> new InvalidCredentialsException("Invalid username or password"));
 
         if (!verifyPassword(request.getPassword(), user.getPassword())) {
-            throw new IllegalArgumentException("Invalid username or password");
+            throw new InvalidCredentialsException("Invalid username or password");
         }
 
         String token = "jwt_token_for_" + user.getUsername();
@@ -58,13 +60,14 @@ public class UserService {
     @Transactional
     public UserResponseDTO updateMetrics(UserMetricsUpdateRequestDTO request) {
         User user = userRepository.findById(request.getUserId())
-                .orElseThrow(() -> new IllegalArgumentException("User not found with id: " + request.getUserId()));
+                .orElseThrow(() -> new UserNotFoundException("User not found with id: " + request.getUserId()));
 
         user.setCurrentWeight(request.getCurrentWeight());
         user.setWeightGoal(request.getWeightGoal());
         user.setHeight(request.getHeight());
         user.setAge(request.getAge());
         user.setActivityLevel(request.getActivityLevel());
+        user.setGender(request.getGender());
         user.setBodyFatPercentage(request.getBodyFatPercentage());
 
         calculateAndSetGoals(user);
@@ -78,8 +81,9 @@ public class UserService {
             return;
         }
 
-        // BMR calculation using Mifflin-St Jeor (using +5 as male default/baseline constant since gender is not a field)
-        double bmr = (10 * user.getCurrentWeight()) + (6.25 * user.getHeight()) - (5 * user.getAge()) + 5;
+        // BMR calculation using Mifflin-St Jeor (constant: female = -161, male/unspecified = +5)
+        double genderConstant = (user.getGender() == Gender.FEMALE) ? -161 : 5;
+        double bmr = (10 * user.getCurrentWeight()) + (6.25 * user.getHeight()) - (5 * user.getAge()) + genderConstant;
 
         double activityMultiplier = switch (user.getActivityLevel()) {
             case SEDENTARY -> 1.2;
@@ -121,6 +125,7 @@ public class UserService {
                 user.getHeight(),
                 user.getAge(),
                 user.getActivityLevel(),
+                user.getGender(),
                 user.getBodyFatPercentage(),
                 user.getDailyCalories(),
                 user.getProteinGoal(),
@@ -156,7 +161,7 @@ public class UserService {
             byte[] testHash = pbkdf2(password.toCharArray(), salt, iterations, hash.length * 8);
 
             return MessageDigest.isEqual(hash, testHash);
-        } catch (NumberFormatException | IllegalArgumentException e) {
+        } catch (IllegalArgumentException e) {
             return false;
         }
     }

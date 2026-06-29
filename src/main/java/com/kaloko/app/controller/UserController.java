@@ -2,6 +2,7 @@ package com.kaloko.app.controller;
 
 import com.kaloko.app.dto.*;
 import com.kaloko.app.service.UserService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -14,19 +15,19 @@ public class UserController {
     private final UserService userService;
 
     @PostMapping("/register")
-    public ResponseEntity<AuthenticationResponseDTO> register(@RequestBody UserRegisterRequestDTO request) {
+    public ResponseEntity<AuthenticationResponseDTO> register(@Valid @RequestBody UserRegisterRequestDTO request) {
         AuthenticationResponseDTO response = userService.register(request);
         return ResponseEntity.ok(response);
     }
 
     @PostMapping("/login")
-    public ResponseEntity<AuthenticationResponseDTO> login(@RequestBody UserLoginRequestDTO request) {
+    public ResponseEntity<AuthenticationResponseDTO> login(@Valid @RequestBody UserLoginRequestDTO request) {
         AuthenticationResponseDTO response = userService.login(request);
         return ResponseEntity.ok(response);
     }
 
     @PutMapping("/metrics")
-    public ResponseEntity<UserResponseDTO> updateMetrics(@RequestBody UserMetricsUpdateRequestDTO request) {
+    public ResponseEntity<UserResponseDTO> updateMetrics(@Valid @RequestBody UserMetricsUpdateRequestDTO request) {
         UserResponseDTO response = userService.updateMetrics(request);
         return ResponseEntity.ok(response);
     }

@@ -5,6 +5,9 @@ import com.kaloko.app.entity.User;
 import com.kaloko.app.entity.Gender;
 import com.kaloko.app.exception.*;
 import com.kaloko.app.repository.UserRepository;
+import com.kaloko.app.security.JwtService;
+import com.kaloko.app.security.RefreshTokenService;
+import com.kaloko.app.entity.RefreshToken;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +25,8 @@ import java.util.Base64;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final JwtService jwtService;
+    private final RefreshTokenService refreshTokenService;
 
     @Transactional
     public AuthenticationResponseDTO register(UserRegisterRequestDTO request) {
@@ -40,11 +45,13 @@ public class UserService {
 
         User savedUser = userRepository.save(user);
         
-        String token = "jwt_token_for_" + savedUser.getUsername();
+        String token = jwtService.generateToken(savedUser.getUsername());
+        RefreshToken refreshToken = refreshTokenService.createRefreshToken(savedUser.getId());
         
-        return new AuthenticationResponseDTO(token, convertToResponseDTO(savedUser));
+        return new AuthenticationResponseDTO(token, refreshToken.getToken(), convertToResponseDTO(savedUser));
     }
 
+    @Transactional
     public AuthenticationResponseDTO login(UserLoginRequestDTO request) {
         User user = userRepository.findByUsername(request.getUsername())
                 .orElseThrow(() -> new InvalidCredentialsException("Invalid username or password"));
@@ -53,8 +60,22 @@ public class UserService {
             throw new InvalidCredentialsException("Invalid username or password");
         }
 
-        String token = "jwt_token_for_" + user.getUsername();
-        return new AuthenticationResponseDTO(token, convertToResponseDTO(user));
+        String token = jwtService.generateToken(user.getUsername());
+        RefreshToken refreshToken = refreshTokenService.createRefreshToken(user.getId());
+
+        return new AuthenticationResponseDTO(token, refreshToken.getToken(), convertToResponseDTO(user));
+    }
+
+    @Transactional
+    public TokenRefreshResponseDTO refreshToken(RefreshTokenRequestDTO request) {
+        return refreshTokenService.findByToken(request.getRefreshToken())
+                .map(refreshTokenService::verifyExpiration)
+                .map(RefreshToken::getUser)
+                .map(user -> {
+                    String token = jwtService.generateToken(user.getUsername());
+                    return new TokenRefreshResponseDTO(token, request.getRefreshToken());
+                })
+                .orElseThrow(() -> new InvalidTokenException("Refresh token not found"));
     }
 
     @Transactional

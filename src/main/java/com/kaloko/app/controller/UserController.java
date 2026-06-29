@@ -26,6 +26,12 @@ public class UserController {
         return ResponseEntity.ok(response);
     }
 
+    @PostMapping("/refresh")
+    public ResponseEntity<TokenRefreshResponseDTO> refreshToken(@Valid @RequestBody RefreshTokenRequestDTO request) {
+        TokenRefreshResponseDTO response = userService.refreshToken(request);
+        return ResponseEntity.ok(response);
+    }
+
     @PutMapping("/metrics")
     public ResponseEntity<UserResponseDTO> updateMetrics(@Valid @RequestBody UserMetricsUpdateRequestDTO request) {
         UserResponseDTO response = userService.updateMetrics(request);

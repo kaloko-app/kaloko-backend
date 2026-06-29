@@ -37,13 +37,13 @@ public class User {
     private String password;
 
     @Column(name = "current_weight")
-    private Double currentWeight;
+    private Float currentWeight;
 
     @Column(name = "weight_goal")
-    private Double weightGoal;
+    private Float weightGoal;
 
     @Column(name = "height")
-    private Double height;
+    private Float height;
 
     @Column(name = "age")
     private Integer age;
@@ -52,8 +52,12 @@ public class User {
     @Column(name = "activity_level")
     private ActivityLevel activityLevel;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "gender")
+    private Gender gender;
+
     @Column(name = "body_fat_percentage")
-    private Double bodyFatPercentage;
+    private Float bodyFatPercentage;
 
     @Column(name = "daily_calories")
     private Integer dailyCalories;

@@ -1,5 +1,6 @@
 package com.kaloko.app.dto;
 
+import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -7,8 +8,7 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class AuthenticationResponseDTO {
-    private String token;
+public class RefreshTokenRequestDTO {
+    @NotBlank(message = "Refresh token is required")
     private String refreshToken;
-    private UserResponseDTO user;
 }

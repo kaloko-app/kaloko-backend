@@ -12,10 +12,18 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
-    pen-in-view: false
+    open-in-view: false
     hibernate:
       ddl-auto: ${HIBERNATE_DDL_AUTO:update}
     show-sql: true
     properties:
       hibernate:
         format_sql: true
+
+application:
+  security:
+    jwt:
+      secret-key: ${JWT_SECRET_KEY}
+      expiration: ${JWT_EXPIRATION:86400000} # 24 hours
+      refresh-token:
+        expiration: ${JWT_REFRESH_EXPIRATION:604800000} # 7 days
